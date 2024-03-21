@@ -7,20 +7,15 @@ Date: February 2024
 Purpose: This will test for DNAC integration and functionality via the API
 """
 #  Basic Python package imports
-# from time import sleep
-# import time
 from sys import argv
-# import re
-import json
+from time import sleep
 from pprint import pprint
-import logging
 import requests
 from requests.auth import HTTPBasicAuth
 import argparse
 import urllib3
 
 urllib3.disable_warnings()
-log = logging.getLogger(__name__)
 
 
 #  Class containing the API calls for the DNAC server
@@ -31,176 +26,162 @@ class DnacApi:
     NOTE:  DNAC TOKENs expire after 1 hour so long tests may require re-authentication.  This has been built into the
            base function calls (get, post, put, delete) and should not require manual intervention.
     """
-
-    def __init__(self, dnac_ip, USERNAME, PASSWORD):
+    
+    def __init__(self, dnac_ip, username, password):
         self.dnac_ip = dnac_ip
-        self.USERNAME = USERNAME
-        self.PASSWORD = PASSWORD
+        self.username = username
+        self.password = password
         self.TOKEN = ""  # Token is valid for 1 hour
-        self.DNAC_BASE_URL = ""
-        self.HEADERS = ""
-        self.authenticate_dnac(dnac_ip, USERNAME, PASSWORD)
-
-    def authenticate_dnac(self, dnac_ip, USERNAME, PASSWORD):
+        self.DNAC_base_url = ""
+        self.headers = {}
+        self.authenticate_dnac(dnac_ip, username, password)
+    
+    def authenticate_dnac(self, dnac_ip, username, password):
         """
         method: authenticates the DNAC server with the given credentials,
             returns Token on the successful authentication
         param dnac_ip:    IP address of the DNAC
-        param USERNAME:    Username for the DNAC
-        param PASSWORD:    Password for the given Username
+        param username:    Username for the DNAC
+        param password:    Password for the given Username
         """
-        BASE_URL = "https://" + str(dnac_ip)
-        AUTH_URL = "/dna/system/api/v1/auth/token"
-        URL = BASE_URL + AUTH_URL
-        log.info("POST {}".format(URL))
-        response = requests.post(URL, auth=HTTPBasicAuth(USERNAME, PASSWORD), verify=False)
-
+        base_url = "https://" + str(dnac_ip)
+        auth_url = "/dna/system/api/v1/auth/token"
+        url = base_url + auth_url
+        
+        response = requests.post(url, auth=HTTPBasicAuth(username, password), verify=False)
+        
         if response.status_code == 200:
-            log.info("DNAC Authentication Status Code : {}".format(response.status_code))
-            # global TOKEN, DNAC_BASE_URL, HEADERS
+            
+            # global TOKEN, DNAC_base_url, headers
             self.TOKEN = response.json()['Token']
-            self.DNAC_BASE_URL = BASE_URL
-            self.HEADERS = {'X-Auth-Token': self.TOKEN, 'Content-Type': 'application/json'}
+            self.DNAC_base_url = base_url
+            self.headers = {'X-Auth-Token': self.TOKEN, 'Content-Type': 'application/json'}
             return response.status_code
         else:
-            log.error("DNAC Authentication Status Code : {}".format(response.status_code))
-            log.error(response.json())
-            log.error('DNAC Authentication failed')
+            print("DNAC Authentication Status Code : {}".format(response.status_code))
+            print(response.json())
+            print('DNAC Authentication failed')
             return response.status_code
-
-    def get_API(self, get_url, query_string={}):
+    
+    def get_api(self, get_url, query_string=None):
         """
-        method: All the GET API calls will be excuted by this method
-        param: get_url - GET URL for the resource
-               query_string - Query Paramter to the Get API call (if necessary)
+        method: All the GET API calls will be executed by this method
+        param: get_url - GET url for the resource
+               query_string - Query Parameter to the Get API call (if necessary)
         """
-        URL = self.DNAC_BASE_URL + get_url
-        log.info("GET {}".format(URL))
+        url = self.DNAC_base_url + get_url
         if query_string:
-            log.info("Query Parameters : {}".format(query_string))
-            response = requests.get(URL, headers=self.HEADERS, params=query_string, verify=False)
+            response = requests.get(url, headers=self.headers, params=query_string, verify=False)
         else:
-            response = requests.get(URL, headers=self.HEADERS, verify=False)
-
+            response = requests.get(url, headers=self.headers, verify=False)
+        
         # Checking if re-authentication is needed
         if response.status_code == 200 or response.status_code == 202:
-            # log.info(response.json())
             return response
         elif response.status_code in (401, 403):
-            log.warning(f"status code: {response.status_code}  |  Token has expired.  Re-authenticating to DNAC.")
-            self.authenticate_dnac(self.dnac_ip, self.USERNAME, self.PASSWORD)
+            print(f"status code: {response.status_code}  |  Token has expired.  Re-authenticating to DNAC.")
+            self.authenticate_dnac(self.dnac_ip, self.username, self.password)
             # resubmitting request after authentication
             if query_string:
-                log.info("Query Parameters : {}".format(query_string))
-                response = requests.get(URL, headers=self.HEADERS, params=query_string, verify=False)
+                response = requests.get(url, headers=self.headers, params=query_string, verify=False)
             else:
-                response = requests.get(URL, headers=self.HEADERS, verify=False)
+                response = requests.get(url, headers=self.headers, verify=False)
             return response
         else:
-            log.error(response)
-            log.error(response.json())
+            print(response)
+            print(response.json())
             return False
-
-    def post_API(self, post_url, json_payload):
+    
+    def post_api(self, post_url, json_payload):
         """
-        method: All the POST API calls will be excuted by this method
-        param: post_url - POST URL for the resource
+        method: All the POST API calls will be executed by this method
+        param: post_url - POST url for the resource
                json_payload - Input payload for that API call
         """
-        URL = self.DNAC_BASE_URL + post_url
-        log.info("POST {}".format(URL))
-        log.info("Payload : {}".format(json_payload))
-        response = requests.post(URL, headers=self.HEADERS, json=json_payload, verify=False)
-
+        url = self.DNAC_base_url + post_url
+        response = requests.post(url, headers=self.headers, json=json_payload, verify=False)
+        
         # Checking if re-authentication is needed
         if response.status_code == 200 or response.status_code == 202:
             return response
         elif response.status_code in (401, 403):
-            log.warning(f"status code: {response.status_code}  |  Token has expired.  Re-authenticating to DNAC.")
-            self.authenticate_dnac(self.dnac_ip, self.USERNAME, self.PASSWORD)
+            print(f"status code: {response.status_code}  |  Token has expired.  Re-authenticating to DNAC.")
+            self.authenticate_dnac(self.dnac_ip, self.username, self.password)
             # resubmitting request after authentication
-            response = requests.post(URL, headers=self.HEADERS, json=json_payload, verify=False)
+            response = requests.post(url, headers=self.headers, json=json_payload, verify=False)
             return response
         else:
-            log.error(response)
-            log.error(response.json())
+            print(response)
+            print(response.json())
             return False
-
-    def put_API(self, put_url, payload):
+    
+    def put_api(self, put_url, payload):
         """
-        method: All the PUT API calls will be excuted by this method
-        param: put_url - PUT URL for the resource
+        method: All the PUT API calls will be executed by this method
+        param: put_url - PUT url for the resource
                payload - Input payload for that API call
         """
-        URL = self.DNAC_BASE_URL + put_url
-        log.info("PUT {}".format(URL))
-        log.debug("Payload : {}".format(payload))
-        response = requests.put(URL, headers=self.HEADERS, json=payload, verify=False)
-
+        url = self.DNAC_base_url + put_url
+        response = requests.put(url, headers=self.headers, json=payload, verify=False)
+        
         # Checking if re-authentication is needed
         if response.status_code == 200 or response.status_code == 202:
             return response
         elif response.status_code in (401, 403):
-            log.warning(f"status code: {response.status_code}  |  Token has expired.  Re-authenticating to DNAC.")
-            self.authenticate_dnac(self.dnac_ip, self.USERNAME, self.PASSWORD)
+            print(f"status code: {response.status_code}  |  Token has expired.  Re-authenticating to DNAC.")
+            self.authenticate_dnac(self.dnac_ip, self.username, self.password)
             # resubmitting request after authentication
-            response = requests.put(URL, headers=self.HEADERS, json=payload, verify=False)
+            response = requests.put(url, headers=self.headers, json=payload, verify=False)
             return response
         else:
-            log.error(response)
-            log.error(response.json())
+            print(response)
+            print(response.json())
             return False
-
-    def delete_API(self, delete_url, query_string={}):
+    
+    def delete_api(self, delete_url, query_string=None):
         """
-        method: All the DELETE API calls will be excuted by this method
-        param: delete_url - Delete URL for the resource
-               query_string - Query Paramter to the Delete API call (if necessary)
+        method: All the DELETE API calls will be executed by this method
+        param: delete_url - Delete url for the resource
+               query_string - Query Parameter to the Delete API call (if necessary)
         """
-        URL = self.DNAC_BASE_URL + delete_url
-        log.info("DELETE {}".format(URL))
+        url = self.DNAC_base_url + delete_url
         if query_string:
-            log.info("Query Parameters : {}".format(query_string))
-            response = requests.delete(URL, headers=self.HEADERS, params=query_string, verify=False)
+            response = requests.delete(url, headers=self.headers, params=query_string, verify=False)
         else:
-            response = requests.delete(URL, headers=self.HEADERS, verify=False)
-
+            response = requests.delete(url, headers=self.headers, verify=False)
+        
         # Checking if re-authentication is needed
         if response.status_code == 200 or response.status_code == 202:
-            log.info(response.json())
+            print(response.json())
             return response
         elif response.status_code in (401, 403):
-            log.warning(f"status code: {response.status_code}  |  Token has expired.  Re-authenticating to DNAC.")
-            self.authenticate_dnac(self.dnac_ip, self.USERNAME, self.PASSWORD)
+            print(f"status code: {response.status_code}  |  Token has expired.  Re-authenticating to DNAC.")
+            self.authenticate_dnac(self.dnac_ip, self.username, self.password)
             # resubmitting request after authentication
             if query_string:
-                log.info("Query Parameters : {}".format(query_string))
-                response = requests.delete(URL, headers=self.HEADERS, params=query_string, verify=False)
+                response = requests.delete(url, headers=self.headers, params=query_string, verify=False)
             else:
-                response = requests.delete(URL, headers=self.HEADERS, verify=False)
+                response = requests.delete(url, headers=self.headers, verify=False)
             return response
         else:
-            log.error(response)
-            log.error(response.json())
+            print(response)
+            print(response.json())
             return False
     
     def get_site_info(self):
         """
         method: Get the Site Info
         """
-        SITE_URL = '/dna/intent/api/v1/site'
-        response = self.get_API(SITE_URL)
-        # log.debug(response.json())
+        site_url = '/dna/intent/api/v1/site'
+        response = self.get_api(site_url)
         return response
-
+    
     def get_device_list(self):
         """
         :method:    Get all devices (and device details) that DNAC has discovered
         """
-        log.info("Retrieving list of discovered devices")
-        DEVICE_LIST_URL = '/dna/intent/api/v1/network-device'
-        response = self.get_API(DEVICE_LIST_URL)
-        # log.debug(response.json())
+        device_list_url = '/dna/intent/api/v1/network-device'
+        response = self.get_api(device_list_url)
         return response
     
     def get_device_id_by_name(self, device_name):
@@ -211,11 +192,9 @@ class DnacApi:
         """
         device_list = self.get_device_list()
         for device in device_list.json()['response']:
-            # log.info(device)
-            if device['hostname'].split('.')[0] == device_name:
-                log.info(device['id'])
+            if device['hostname'] == device_name or device['hostname'].split('.')[0] == device_name:
                 return device['id']
-        log.info(f"{device_name} was not found.")
+        print(f"{device_name} was not found.")
         return device_list
     
     def execute_command(self, payload):
@@ -230,7 +209,7 @@ class DnacApi:
         }
          """
         site_url = '/api/v1/network-device-poller/cli/read-request'
-        response = self.post_API(site_url, payload)
+        response = self.post_api(site_url, payload)
         return response
     
     def get_device_details_by_id(self, device_id):
@@ -241,21 +220,45 @@ class DnacApi:
         """
         get_url = '/dna/intent/api/v1/device-detail'
         query_param = {"searchBy": device_id, "identifier": "uuid"}
-        response = self.get_API(get_url, query_param)
+        response = self.get_api(get_url, query_param)
         if response is False:
             return False
         return response.json()['response']
-
-    def get_device_health(self, device_id):
+    
+    def get_task_by_id(self, task_id):
         """
-        method: return the overall health score of the given device
-        param: device_id - Device ID
+        method: To check the status of the DNAC Task by the task ID
+        param: task_id : Task ID to check the Status of the task
         """
-        device_details = self.get_device_details_by_id(device_id)
-        log.info(json.dumps(device_details, indent=2))
-        if 'overallHealth' in device_details:
-            return device_details['overallHealth']
-        return None
+        task_id_by_url = '/dna/intent/api/v1/task/{task_id}'.format(task_id=task_id)
+        response = self.get_api(task_id_by_url)
+        if response is False:
+            return False
+        
+        if response.json()['response']['isError']:
+            if 'failureReason' in response.json()['response']:
+                print("{}".format(response.json()['response']['failureReason']))
+            return False
+        return response.json()['response']
+    
+    def get_file(self, file_id):
+        """
+        :method:    Returns the file for the specified file ID
+        :param file_id:
+        :return:
+        """
+        site_url = f"/api/v1/file/{file_id}"
+        response = self.get_api(site_url)
+        return response
+    
+    def get_interface_info_by_device_id(self, device_uuid):
+        """
+        :method:   Returns information of all interfaces on specified device
+        :param device_uuid:    The UUID of the device to be queried
+        """
+        get_url = f"/dna/intent/api/v1/interface/network-device/{device_uuid}"
+        response = self.get_api(get_url)
+        return response
 
 
 #  Class containing the methods to test the DNAC API
@@ -263,7 +266,8 @@ class DnacTesting:
     """
     This class contains methods to test DNAC functionality via the API
     """
-
+    dnac_methods = None
+    
     def authenticate(self, dnac_device: dict):
         """
         :method:    Initiates the Authentication process
@@ -273,49 +277,58 @@ class DnacTesting:
         dnac_ip = dnac_device["address"]
         username = dnac_device["username"]
         password = dnac_device["password"]
-        # log.debug(dnac_ip, username, password)
+        
         self.dnac_methods = DnacApi(dnac_ip, username, password)
         
         #  If the TOKEN exists, then the Authentication was successful.
         if self.dnac_methods.TOKEN:
-            print("The Token has been created successfully")
             return True
         return False
-
+    
     def get_site_info(self):
         """
         :method:    Retrieves info on ALL sites associated with the server
         """
-        log.info("Retrieving site info")
         response = self.dnac_methods.get_site_info()
-        log.debug(response.json())
-        pprint(response.json())
-        return response
-
+        return response.json()
+    
     def get_all_devices(self):
         """
         :method:    Retrieves ALL devices that have been discovered by DNAC
         """
-        log.info("Retrieving list of all devices.")
         device_list = self.dnac_methods.get_device_list().json()
-        # log.debug(device_list)
-        log.info("parsing the output")
         device_dict = {}
+        testing_devices = ["FOC2436V05E.cpwe-ra-cisco.local",
+                           "SN-FOC2436V05G.cpwe-ra-cisco.local",
+                           "SN-FOC2350V00A",
+                           "SN-FOC2316V09L",
+                           "C9500-N15-1.cpwe-ra-cisco.local",
+                           "C9500-N15-2.cpwe-ra-cisco.local",
+                           "C9300-N15-2.cpwe-ra-cisco.local",
+                           "C9300-N15-1.cpwe-ra-cisco.local",
+                           "C9300-N15-4.cpwe-ra-cisco.local",
+                           "C9300-N14-Stack-1.cpwe-ra-cisco.local",
+                           "C9500-N12-T1.cpwe-ra-cisco.local",
+                           "C9500-N12-T2.cpwe-ra-cisco.local",
+                           "C9300-N15-3.cpwe-ra-cisco.local",
+                           "C9300-N12-stack-2.cpwe-ra-cisco.local",
+                           "C9300-N12-Stack-3-Site2.cpwe-ra-cisco.local"
+                           ]
         for item in device_list['response']:
             try:
-                if item['hostname']:
-                    device_dict[item['hostname'].split('.')[0]] = {
+                if item['hostname'] in testing_devices:
+                    device_dict[item['hostname']] = {
                         "id": item['id'],
                         "managementIpAddress": item['managementIpAddress'],
                         "softwareVersion": item['softwareVersion']
                     }
             except KeyError:
-                log.exception(f"Caught an exception while trying to parse: {item}.")
+                print(f"Caught an exception while trying to parse: {item}.")
                 continue
             except AttributeError:
-                log.exception(f"Caught an exception while trying to parse: {item}.")
+                print(f"Caught an exception while trying to parse: {item}.")
                 print("Failed to parse the output.")
-        log.info(device_dict.keys())
+        return device_dict  # .keys()
     
     def command_runner(self, device_name, command):
         """
@@ -333,8 +346,24 @@ class DnacTesting:
             "timeout": 120
         }
         response = self.dnac_methods.execute_command(payload)
-        log.debug(response.json())
-        return response
+        task_id = response.json()['response']['taskId']
+        task_status = self.dnac_methods.get_task_by_id(task_id)
+        attempt = 1
+        while "CLI Runner request creation" in task_status['progress'] and attempt <= 5:
+            sleep(2)
+            task_status = self.dnac_methods.get_task_by_id(task_id)
+            attempt += 1
+        if "fileId" in task_status['progress']:
+            file_id = task_status['progress'][11:-2]
+            command_output = self.dnac_methods.get_file(file_id)
+            command_output = command_output.json()[0]['commandResponses']['SUCCESS'][command]
+            command_output = command_output.split('\n')
+            return command_output[1:-1]
+        else:
+            print(f"Task Status: {task_status['progress']}\n"
+                  f"Task failed to complete.  Please check the DNAC server for more information.")
+            exit(1)
+            # return task_status['progress']
     
     def get_device_info(self, device_name):
         """
@@ -343,17 +372,16 @@ class DnacTesting:
         """
         device_id = self.dnac_methods.get_device_id_by_name(device_name)
         response = self.dnac_methods.get_device_details_by_id(device_id)
-        log.debug(response)
+        # pprint(response)
         return response
     
-    def get_device_health(self, device_name):
+    def get_interface_list(self, device_name):
         """
-        :method:    This method will retrieve the health score for a specific device
+        :method:    This method will retrieve the interface list for a specific device
         :param device_name:    The hostname of the device
         """
         device_id = self.dnac_methods.get_device_id_by_name(device_name)
-        response = self.dnac_methods.get_device_health(device_id)
-        log.debug(response)
+        response = self.dnac_methods.get_interface_info_by_device_id(device_id)
         return response
 
 
@@ -363,67 +391,60 @@ def main():
     This is the main function for the DNAC API testing
     """
     # Parsing the arguments
-    try:
-        parser = argparse.ArgumentParser()
-        
-        # Arguments for Catalyst Center Authentication:
-        parser.add_argument('-ip', dest='ip_address',
-                            help='The IP of the DNAC Server',
-                            type=str, default=''
-                            )
-        parser.add_argument('-u', '--username', dest='username',
-                            help='The username of the DNAC Server',
-                            type=str, default=''
-                            )
-        parser.add_argument('-p', '--password', dest='password',
-                            help='The password of the User selected',
-                            type=str, default=''
-                            )
-        parser.add_argument('--run_command', dest='run_command',
-                            help='Takes input as "device_name|command"  Example: "device1|sh logging"',
-                            type=str, default=''
-                            )
-        parser.add_argument('-d', '--device_hostname', dest='device_name',
-                            help='The hostname of the device',
-                            type=str, default=''
-                            )
-        parser.add_argument('-c', '--command', dest='command',
-                            help='The command to be executed on the device.  Example: "sh logging"',
-                            type=str, default=''
-                            )
-        parser.add_argument('--site_info', dest='site_info',
-                            help='Check the site info',
-                            type=str, default=''
-                            )
-        parser.add_argument('--show_devices', dest='show_devices',
-                            help='Show all the devices in the Site',
-                            type=str, default=''
-                            )
-        parser.add_argument('--show_device_info', dest='show_device_info',
-                            help='Show the device info for a specific device.  Requires the -d flag to be set.',
-                            type=str, default=''
-                            )
-        parser.add_argument('--show_device_health', dest='show_device_health',
-                            help='Show the device health for a specific device.  Requires the -d flag to be set.',
-                            type=str, default=''
-                            )
-                            
-        ip_address = parser.parse_args().ip_address
-        username = parser.parse_args().username
-        password = parser.parse_args().password
-        args, argv[1:] = parser.parse_known_args(argv[1:])
-    except Exception as e:
-        print(f"An error occurred while trying to parse the arguments: {e}")
-        parser.print_help()
-        exit(1)
-        
+    parser = argparse.ArgumentParser()
+    
+    # Arguments for Catalyst Center Authentication:
+    parser.add_argument('-ip', dest='ip_address',
+                        help='The IP of the DNAC Server',
+                        type=str, default='')
+    parser.add_argument('-u', '--username', dest='username',
+                        help='The username of the DNAC Server',
+                        type=str, default='')
+    parser.add_argument('-p', '--password', dest='password',
+                        help='The password of the User selected',
+                        type=str, default='')
+    parser.add_argument('-d', '--device_name', dest='device_name',
+                        help='The hostname of the device',
+                        type=str, default='')
+    parser.add_argument('-i', '--device_info', dest='device_info',
+                        help='Show the device info for a specific device. '
+                             'Requires the -d flag to be set.',
+                        action='store_true')
+    parser.add_argument('-c', '--command', dest='command',
+                        help='The command to be executed on the device. '
+                             'NOTE: commands with spaces must be enclosed in quotes. '
+                             'Example: -c "sh logging"',
+                        type=str, default='')
+    parser.add_argument('-sd', '--show_drops', dest='show_drops',
+                        help='Custom shortcut command for "show platform hardware qos..."',
+                        action='store_true')
+    parser.add_argument('-int', '--interface', dest='custom_interface',
+                        help='NOTE: Only used with the custom "show drops" command. '
+                             'The interface the user would like to run the command against. '
+                             'Please provide the complete interface name (GigabitEthernet1/1 vs Gi1/1)',
+                        type=str, default='')
+    parser.add_argument('-s', '--site_info', dest='site_info',
+                        help='Check the site info',
+                        action='store_true')
+    parser.add_argument('-l', '--show_devices', dest='show_devices',
+                        help='Show all the devices in the Site',
+                        action='store_true')
+    # ip_address = parser.parse_args().ip_address
+    # username = parser.parse_args().username
+    # password = parser.parse_args().password
+    args, argv[1:] = parser.parse_known_args(argv[1:])
+    
     #  Create an instance of the DnacSetup class
     dnac = DnacTesting()
     
     #  Authenticate to DNAC
     try:
+        ip_address = args.ip_address
+        username = args.username
+        password = args.password
+        
         if ip_address and username and password:
-            print("All required arguments have been provided")
+            pass
         else:
             print("Not all required arguments have been provided")
             parser.print_help()
@@ -435,48 +456,185 @@ def main():
         }
         is_authenticated = dnac.authenticate(dnac_device)
         if is_authenticated:
-            print("The DNAC device has been authenticated.")
+            pass
         else:
             print("The DNAC device has not been authenticated.")
             exit(1)
     except Exception as e:
-        print(f"An error occurred while trying to authenticate the DNAC device: {e}")
+        print(f"An error occurred while trying to authenticate the DNAC device: {e}\n"
+              "Please check the provided ip address and credentials then try again.")
         exit(1)
+    
+    """
+    FOR IE switches:
+        This one needs to be run by interface, not sure if that can be done dynamically.
+            Idea is to identify if there are any drops on the queues
+        show platform hardware qos asic 0 int x  <--run for specific interface
+        show prp stat egr
+        show prp stat ing
+        show prp stat nodeTableStatistics
+        show prp channel 1 det
+
+    For catalyst
+        Same, this is per interface:
+            show platform hardware fed switch active qos queue stats interface x  <--run for specific interface
+    """
+    # Customer requested custom commands for the IE and Catalyst devices.
+    ie_device_commands = {
+        "show drops": "show platform hardware qos asic 0 int {}"
+    }
+    catalyst_device_commands = {
+        "show drops": "show platform hardware fed switch active qos queue stats interface {}"
+    }
+    # Customer only wanted specific devices to be used for the demonstration.
+    # This can be modified to include all devices if needed.
+    ie_switches = ["FOC2436V05E.cpwe-ra-cisco.local",
+                   "SN-FOC2436V05G.cpwe-ra-cisco.local",
+                   "SN-FOC2350V00A",
+                   "SN-FOC2316V09L"
+                   ]
+    catalyst_switches = ["C9500-N15-1.cpwe-ra-cisco.local",
+                         "C9500-N15-2.cpwe-ra-cisco.local",
+                         "C9300-N15-2.cpwe-ra-cisco.local",
+                         "C9300-N15-1.cpwe-ra-cisco.local",
+                         "C9300-N15-4.cpwe-ra-cisco.local",
+                         "C9300-N14-Stack-1.cpwe-ra-cisco.local",
+                         "C9500-N12-T1.cpwe-ra-cisco.local",
+                         "C9500-N12-T2.cpwe-ra-cisco.local",
+                         "C9300-N15-3.cpwe-ra-cisco.local",
+                         "C9300-N12-stack-2.cpwe-ra-cisco.local",
+                         "C9300-N12-Stack-3-Site2.cpwe-ra-cisco.local"
+                         ]
     
     #  Once authenticated, we can start testing the DNAC API
     try:
-        if args.site_info:
-            dnac.get_site_info()
-        if args.show_devices:
-            dnac.get_all_devices()
-        if args.run_command:
-            if args.device_name and args.command:
-                device_name = args.device_name
-                command = args.command
-            elif '|' not in args.run_command:
-                print("The command should be in the format '<device_name>|<command>'.  Example: 'device1|sh logging'")
-                exit(1)
+        def show_drops(device, drops_command, custom_interface=""):
+            """
+            :method:    This method will run the custom "show drops" command on the device
+            :param device:    The hostname of the device
+            :param drops_command:    The command to be executed
+            :param custom_interface:    The interface the command will be run against
+            EXAMPLE:
+                On IE devices:
+                    "drops_command" = "show platform hardware qos asic 0 int XXXXX"
+                On Catalyst devices:
+                    "drops_command" = "show platform hardware fed switch active qos queue stats interface XXXXX"
+            """
+            #  If a specific interface is specified, test against that interface
+            if custom_interface:
+                #  Get the list of interfaces on the physical device:
+                interface_list = dnac.get_interface_list(device).json()
+                interface_port_list = []
+                for interface in interface_list['response']:
+                    interface_port_list.append(interface['portName'])
+                #  Verify that the interface(s) is/are valid
+                for interface in custom_interface.split(','):
+                    #  If the interface is not found, skip it
+                    if interface not in interface_port_list:
+                        # for device_interface in interface_list['response']:
+                        #     if interface in device_interface['portName']:
+                        print(f"The interface '{interface}' was not found on {device}.\nSkipping this interface.")
+                        continue
+                    else:
+                        port_command = drops_command.format(interface)
+                        print(f"\n\nRunning the command '{port_command}' on {device}:"
+                              f"\n________{device}________{interface}________\n")
+                        command_response = dnac.command_runner(device, port_command)
+                        for _line in command_response:
+                            print(_line)
+            #  If no interface is specified, test against all interfaces
             else:
-                device_name, command = args.run_command.split('|')
-            dnac.command_runner(device_name, command)
-        if args.show_device_info:
+                interface_list = dnac.get_interface_list(device).json()
+                for interface in interface_list['response']:
+                    if "AppGigabitEthernet" in interface['portName']:
+                        continue
+                    elif "Gig" in interface['portName']:
+                        port_command = drops_command.format(interface['portName'])
+                        # print(f"{port_command=}")
+                        print(f"\n\nRunning the command '{port_command}' on {device}:"
+                              f"\n________{device}________{interface['portName']}________\n")
+                        command_response = dnac.command_runner(device, port_command)
+                        for _line in command_response:
+                            print(_line)
+        
+        # Running user requested tests:
+        if args.site_info:
+            print("Retrieving site info:")
+            pprint(dnac.get_site_info())
+        if args.show_devices:
+            print("Retrieving list of all devices:")
+            all_devices = dnac.get_all_devices()
+            for host in all_devices:
+                print(f" -  {host}")
+            # pprint(all_devices)
+        if args.show_drops and args.device_name:
+            raw_device_list = args.device_name.split(',')
+            raw_command = "show drops"
+            for device_name in raw_device_list:
+                command = ""
+                if device_name in catalyst_switches:
+                    command = catalyst_device_commands[raw_command]
+                elif device_name in ie_switches:
+                    command = ie_device_commands[raw_command]
+                if not command:
+                    print("Unable to determine the device type.")
+                    exit(1)
+                show_drops(device_name, command, args.custom_interface)
+        if args.device_name and args.command:
+            raw_device_list = args.device_name
+            raw_command_list = args.command
+            device_list = []
+            for device_name in raw_device_list.split(','):
+                device_list.append(device_name)
+            for command in raw_command_list.split(','):
+                for device_name in device_list:
+                    #  This is built to handle multiple custom commands.
+                    #  If only using one, this can be greatly simplified.
+                    raw_command = command
+                    custom_command = ""
+                    if device_name in catalyst_switches:
+                        if command in catalyst_device_commands:
+                            custom_command = catalyst_device_commands[command]
+                            # print(f"{custom_command=}")
+                    elif device_name in ie_switches:
+                        if command in ie_device_commands:
+                            custom_command = ie_device_commands[command]
+                            # print(f"{custom_command=}")
+                    
+                    if raw_command == "show drops":
+                        if not custom_command:
+                            print("Unable to determine the device type.")
+                            exit(1)
+                        if args.custom_interface:
+                            show_drops(device_name, custom_command, args.custom_interface)
+                        else:
+                            show_drops(device_name, custom_command)
+                    #  If the command is not a "show drops" command, run it as is
+                    else:
+                        print(f"Running the command '{command}' on {device_name}:")
+                        response = dnac.command_runner(device_name, command)
+                        for line in response:
+                            print(line)
+        if args.device_info:
             if not args.device_name:
                 print("The device name has not been provided. [-d]")
                 parser.print_help()
                 exit(1)
-            dnac.get_device_info(args.device_name)
-        if args.show_device_health:
-            if not args.device_name:
-                print("The device name has not been provided. [-d]")
-                parser.print_help()
-                exit(1)
-            dnac.dnac_methods.get_device_health(args.device_name)
+            print(f"Retrieving device info for {args.device_name}:")
+            pprint(dnac.get_device_info(args.device_name))
+        
+        # If no arguments are provided, print the help menu
+        for option, value in vars(args).items():
+            if value:
+                exit(0)
+        # print("No arguments provided. Displaying help menu:")
+        parser.print_help()
+        exit(1)
     except Exception as e:
         print(f"An error occurred while trying to test the DNAC API: {e}")
         exit(1)
-    
+
 
 #  Run the main function
 if __name__ == "__main__":
     main()
-    
